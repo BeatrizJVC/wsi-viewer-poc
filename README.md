@@ -232,3 +232,13 @@ Those components are not implemented in this repository.
 For a concise architecture description, see [`docs/architecture.md`](docs/architecture.md).
 
 For setup instructions, see [`docs/quickstart.md`](docs/quickstart.md).
+
+
+## Documentation
+
+Additional technical documentation:
+
+- [Architecture](docs/architecture.md)
+- [Quick start](docs/quickstart.md)
+- [Remote deployment with Vercel and Cloudflare](docs/deployment-vercel.md)
+- [WSI streaming benchmarks](docs/benchmarks.md)
