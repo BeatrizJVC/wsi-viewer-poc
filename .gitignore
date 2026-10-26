@@ -12,3 +12,17 @@ npm-debug.log*
 Thumbs.db
 .vscode/
 .idea/
+
+# Vercel local metadata
+.vercel/
+
+# DICOM test data
+*.dcm
+
+# Temporary/debug JSON exports
+instances*.json
+metadata*.json
+series*.json
+new-*.json
+patched-*.json
+max*-*.json

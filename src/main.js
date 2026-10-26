@@ -6,15 +6,19 @@ import * as DICOMMicroscopyViewer from "dicom-microscopy-viewer";
 const status = document.getElementById("status");
 
 const studyInstanceUID =
-  "1.2.826.0.1.3680043.8.498.63359743326259253484214979519130767278";
+  "1.2.826.0.1.3680043.8.498.50351027637117386284842117296183946627";
 
 const seriesInstanceUID =
-  "1.2.826.0.1.3680043.8.498.99804338866843779327838057795676923899";
+  "1.2.826.0.1.3680043.8.498.67448694166075477994787978124648057038";
 
 // Todas las solicitudes DICOMweb pasan por Vite en :8080.
 // Vite las redirige internamente a Orthanc :8042.
+const dicomWebUrl = import.meta.env.VITE_DICOMWEB_URL;
+
+console.log("DICOMweb URL:", dicomWebUrl);
+
 const client = new DICOMwebClient.api.DICOMwebClient({
-  url: "/dicom-web",
+  url: dicomWebUrl,
 });
 
 /**
