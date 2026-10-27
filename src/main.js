@@ -6,13 +6,20 @@ import * as DICOMMicroscopyViewer from "dicom-microscopy-viewer";
 const status = document.getElementById("status");
 
 const studyInstanceUID =
-  "1.2.826.0.1.3680043.8.498.50351027637117386284842117296183946627";
+  "1.2.826.0.1.3680043.8.498.63359743326259253484214979519130767278";
 
 const seriesInstanceUID =
-  "1.2.826.0.1.3680043.8.498.67448694166075477994787978124648057038";
+  "1.2.826.0.1.3680043.8.498.99804338866843779327838057795676923899";
 
-// Todas las solicitudes DICOMweb pasan por Vite en :8080.
-// Vite las redirige internamente a Orthanc :8042.
+// Endpoint DICOMweb configurable según el entorno.
+//
+// Desarrollo local:
+//   VITE_DICOMWEB_URL=/dicom-web
+//   Vite redirige las solicitudes hacia Orthanc.
+//
+// Producción:
+//   VITE_DICOMWEB_URL=https://<tunnel>/dicom-web
+//   El navegador consulta directamente el endpoint público.
 const dicomWebUrl = import.meta.env.VITE_DICOMWEB_URL;
 
 console.log("DICOMweb URL:", dicomWebUrl);
@@ -28,7 +35,7 @@ const client = new DICOMwebClient.api.DICOMwebClient({
  *
  * Pero el navegador está ejecutando el visor desde:
  *
- * http://localhost:8080
+ * http://localhost:8082
  *
  * Para evitar CORS, reescribimos esas URLs para que pasen
  * por el proxy de Vite:
@@ -47,13 +54,22 @@ function rewriteBulkDataURIs(obj) {
 
   for (const [key, value] of Object.entries(obj)) {
     if (key === "BulkDataURI" && typeof value === "string") {
-      if (value.startsWith("http://localhost:8042/dicom-web")) {
-        obj[key] = value.replace(
-          "http://localhost:8042/dicom-web",
-          "/dicom-web"
+      const dicomWebPathIndex = value.indexOf("/dicom-web/");
+
+      if (dicomWebPathIndex !== -1) {
+        const dicomWebPath = value.slice(
+          dicomWebPathIndex + "/dicom-web".length
         );
 
-        console.log("BulkDataURI reescrita:", obj[key]);
+        obj[key] =
+          `${dicomWebUrl.replace(/\/$/, "")}${dicomWebPath}`;
+
+        console.log(
+          "BulkDataURI reescrita:",
+          value,
+          "→",
+          obj[key]
+        );
       }
     } else {
       rewriteBulkDataURIs(value);
