@@ -4,24 +4,10 @@ import * as DICOMwebClient from "dicomweb-client";
 import * as DICOMMicroscopyViewer from "dicom-microscopy-viewer";
 
 import {
-  getImagingStudyByCaseId,
-  extractDicomInfo,
+  resolveImagingForCase,
 } from "./fhir.js";
 
 const status = document.getElementById("status");
-
-// Endpoint DICOMweb configurable según el entorno.
-//
-// Desarrollo local:
-//   VITE_DICOMWEB_URL=/dicom-web
-//   Vite redirige las solicitudes hacia Orthanc.
-//
-// Producción:
-//   VITE_DICOMWEB_URL=https://<endpoint>/dicom-web
-//   El navegador consulta directamente el endpoint público.
-const dicomWebUrl = import.meta.env.VITE_DICOMWEB_URL;
-
-console.log("DICOMweb URL:", dicomWebUrl);
 
 /**
  * Orthanc puede entregar algunos BulkDataURI como URLs absolutas,
@@ -30,11 +16,13 @@ console.log("DICOMweb URL:", dicomWebUrl);
  * http://localhost:8042/dicom-web/...
  *
  * El visor debe reescribirlas usando el endpoint DICOMweb
- * configurado para el entorno actual.
+ * efectivo para el entorno actual.
  */
-function rewriteBulkDataURIs(obj) {
+function rewriteBulkDataURIs(obj, dicomWebUrl) {
   if (Array.isArray(obj)) {
-    obj.forEach(rewriteBulkDataURIs);
+    obj.forEach((item) =>
+      rewriteBulkDataURIs(item, dicomWebUrl)
+    );
     return;
   }
 
@@ -62,7 +50,10 @@ function rewriteBulkDataURIs(obj) {
         );
       }
     } else {
-      rewriteBulkDataURIs(value);
+      rewriteBulkDataURIs(
+        value,
+        dicomWebUrl
+      );
     }
   }
 }
@@ -73,37 +64,54 @@ async function initViewer() {
     // 1. Obtener caseId desde la URL
     // ---------------------------------------------------------
 
-    const params = new URLSearchParams(window.location.search);
+    const params =
+      new URLSearchParams(window.location.search);
 
     // Valor por defecto solo para desarrollo / POC.
-    const caseId = params.get("caseId") || "137092";
-
-    console.log("Caso solicitado:", caseId);
-
-    // ---------------------------------------------------------
-    // 2. Consultar ImagingStudy en HAPI FHIR
-    // ---------------------------------------------------------
-
-    status.textContent =
-      `Consultando ImagingStudy del caso ${caseId}...`;
-
-    const imagingStudy =
-      await getImagingStudyByCaseId(caseId);
+    const caseId =
+      params.get("caseId") || "137092";
 
     console.log(
-      "ImagingStudy recuperado:",
-      imagingStudy
+      "Caso solicitado:",
+      caseId
     );
 
     // ---------------------------------------------------------
-    // 3. Extraer identificadores DICOM desde ImagingStudy
+    // 2. Resolver cadena FHIR completa
+    //    caseId
+    //      → DiagnosticReport
+    //      → ImagingStudy
+    //      → Endpoint
+    //      → UID DICOM
     // ---------------------------------------------------------
 
+    status.textContent =
+      `Resolviendo imágenes del caso ${caseId} en FHIR...`;
+
     const {
+      diagnosticReport,
+      imagingStudy,
+      endpoint,
       studyInstanceUID,
       seriesInstanceUID,
       instances,
-    } = extractDicomInfo(imagingStudy);
+      dicomWebUrl,
+    } = await resolveImagingForCase(caseId);
+
+    console.log(
+      "DiagnosticReport:",
+      diagnosticReport
+    );
+
+    console.log(
+      "ImagingStudy:",
+      imagingStudy
+    );
+
+    console.log(
+      "Endpoint:",
+      endpoint
+    );
 
     console.log(
       "StudyInstanceUID:",
@@ -120,8 +128,13 @@ async function initViewer() {
       instances.length
     );
 
+    console.log(
+      "DICOMweb URL efectiva:",
+      dicomWebUrl
+    );
+
     // ---------------------------------------------------------
-    // 4. Crear cliente DICOMweb
+    // 3. Crear cliente DICOMweb
     // ---------------------------------------------------------
 
     const client =
@@ -130,7 +143,7 @@ async function initViewer() {
       });
 
     // ---------------------------------------------------------
-    // 5. Recuperar metadata DICOM desde Orthanc
+    // 4. Recuperar metadata DICOM desde Orthanc
     // ---------------------------------------------------------
 
     status.textContent =
@@ -147,10 +160,13 @@ async function initViewer() {
       metadata
     );
 
-    rewriteBulkDataURIs(metadata);
+    rewriteBulkDataURIs(
+      metadata,
+      dicomWebUrl
+    );
 
     // ---------------------------------------------------------
-    // 6. Mostrar información de los niveles WSI
+    // 5. Mostrar información de los niveles WSI
     // ---------------------------------------------------------
 
     console.log("===== NIVELES WSI =====");
@@ -217,7 +233,7 @@ async function initViewer() {
     );
 
     // ---------------------------------------------------------
-    // 7. Construir pirámide WSI
+    // 6. Construir pirámide WSI
     // ---------------------------------------------------------
 
     const volumeImages = [];
@@ -265,7 +281,7 @@ async function initViewer() {
     }
 
     // ---------------------------------------------------------
-    // 8. Renderizar visor
+    // 7. Renderizar visor
     // ---------------------------------------------------------
 
     status.textContent =
