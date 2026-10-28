@@ -3,13 +3,12 @@ import "ol/ol.css";
 import * as DICOMwebClient from "dicomweb-client";
 import * as DICOMMicroscopyViewer from "dicom-microscopy-viewer";
 
+import {
+  getImagingStudyByCaseId,
+  extractDicomInfo,
+} from "./fhir.js";
+
 const status = document.getElementById("status");
-
-const studyInstanceUID =
-  "1.2.826.0.1.3680043.8.498.63359743326259253484214979519130767278";
-
-const seriesInstanceUID =
-  "1.2.826.0.1.3680043.8.498.99804338866843779327838057795676923899";
 
 // Endpoint DICOMweb configurable según el entorno.
 //
@@ -18,29 +17,20 @@ const seriesInstanceUID =
 //   Vite redirige las solicitudes hacia Orthanc.
 //
 // Producción:
-//   VITE_DICOMWEB_URL=https://<tunnel>/dicom-web
+//   VITE_DICOMWEB_URL=https://<endpoint>/dicom-web
 //   El navegador consulta directamente el endpoint público.
 const dicomWebUrl = import.meta.env.VITE_DICOMWEB_URL;
 
 console.log("DICOMweb URL:", dicomWebUrl);
 
-const client = new DICOMwebClient.api.DICOMwebClient({
-  url: dicomWebUrl,
-});
-
 /**
- * Orthanc entrega algunos BulkDataURI como URLs absolutas:
+ * Orthanc puede entregar algunos BulkDataURI como URLs absolutas,
+ * por ejemplo:
  *
  * http://localhost:8042/dicom-web/...
  *
- * Pero el navegador está ejecutando el visor desde:
- *
- * http://localhost:8082
- *
- * Para evitar CORS, reescribimos esas URLs para que pasen
- * por el proxy de Vite:
- *
- * /dicom-web/...
+ * El visor debe reescribirlas usando el endpoint DICOMweb
+ * configurado para el entorno actual.
  */
 function rewriteBulkDataURIs(obj) {
   if (Array.isArray(obj)) {
@@ -79,57 +69,145 @@ function rewriteBulkDataURIs(obj) {
 
 async function initViewer() {
   try {
-    status.textContent = "Recuperando metadata DICOM...";
+    // ---------------------------------------------------------
+    // 1. Obtener caseId desde la URL
+    // ---------------------------------------------------------
 
-    const metadata = await client.retrieveSeriesMetadata({
+    const params = new URLSearchParams(window.location.search);
+
+    // Valor por defecto solo para desarrollo / POC.
+    const caseId = params.get("caseId") || "137092";
+
+    console.log("Caso solicitado:", caseId);
+
+    // ---------------------------------------------------------
+    // 2. Consultar ImagingStudy en HAPI FHIR
+    // ---------------------------------------------------------
+
+    status.textContent =
+      `Consultando ImagingStudy del caso ${caseId}...`;
+
+    const imagingStudy =
+      await getImagingStudyByCaseId(caseId);
+
+    console.log(
+      "ImagingStudy recuperado:",
+      imagingStudy
+    );
+
+    // ---------------------------------------------------------
+    // 3. Extraer identificadores DICOM desde ImagingStudy
+    // ---------------------------------------------------------
+
+    const {
       studyInstanceUID,
       seriesInstanceUID,
-    });
+      instances,
+    } = extractDicomInfo(imagingStudy);
 
-    console.log("Metadata original recibida:", metadata);
+    console.log(
+      "StudyInstanceUID:",
+      studyInstanceUID
+    );
+
+    console.log(
+      "SeriesInstanceUID:",
+      seriesInstanceUID
+    );
+
+    console.log(
+      "Instancias FHIR:",
+      instances.length
+    );
+
+    // ---------------------------------------------------------
+    // 4. Crear cliente DICOMweb
+    // ---------------------------------------------------------
+
+    const client =
+      new DICOMwebClient.api.DICOMwebClient({
+        url: dicomWebUrl,
+      });
+
+    // ---------------------------------------------------------
+    // 5. Recuperar metadata DICOM desde Orthanc
+    // ---------------------------------------------------------
+
+    status.textContent =
+      "Recuperando metadata DICOM...";
+
+    const metadata =
+      await client.retrieveSeriesMetadata({
+        studyInstanceUID,
+        seriesInstanceUID,
+      });
+
+    console.log(
+      "Metadata original recibida:",
+      metadata
+    );
 
     rewriteBulkDataURIs(metadata);
 
+    // ---------------------------------------------------------
+    // 6. Mostrar información de los niveles WSI
+    // ---------------------------------------------------------
+
     console.log("===== NIVELES WSI =====");
 
-    metadata.forEach((instanceMetadata, index) => {
-      try {
-        const image =
-          new DICOMMicroscopyViewer.metadata.VLWholeSlideMicroscopyImage({
-            metadata: instanceMetadata,
-          });
+    metadata.forEach(
+      (instanceMetadata, index) => {
+        try {
+          const image =
+            new DICOMMicroscopyViewer.metadata
+              .VLWholeSlideMicroscopyImage({
+                metadata: instanceMetadata,
+              });
 
-        const imageFlavor = image.ImageType?.[2];
+          const imageFlavor =
+            image.ImageType?.[2];
 
-        if (imageFlavor === "VOLUME") {
-          const numberOfFrames =
-            instanceMetadata["00280008"]?.Value?.[0];
+          if (imageFlavor === "VOLUME") {
+            const numberOfFrames =
+              instanceMetadata["00280008"]
+                ?.Value?.[0];
 
-          const totalPixelMatrixColumns =
-            instanceMetadata["00480006"]?.Value?.[0];
+            const totalPixelMatrixColumns =
+              instanceMetadata["00480006"]
+                ?.Value?.[0];
 
-          const totalPixelMatrixRows =
-            instanceMetadata["00480007"]?.Value?.[0];
+            const totalPixelMatrixRows =
+              instanceMetadata["00480007"]
+                ?.Value?.[0];
 
-          const pixelMeasures =
-            instanceMetadata["52009229"]?.Value?.[0]?.["00289110"]?.Value?.[0];
+            const pixelMeasures =
+              instanceMetadata["52009229"]
+                ?.Value?.[0]
+                ?.["00289110"]
+                ?.Value?.[0];
 
-          const pixelSpacing =
-            pixelMeasures?.["00280030"]?.Value;
+            const pixelSpacing =
+              pixelMeasures?.["00280030"]
+                ?.Value;
 
-          console.log({
-            nivel: index,
-            sopInstanceUID: image.SOPInstanceUID,
-            numberOfFrames,
-            totalPixelMatrixColumns,
-            totalPixelMatrixRows,
-            pixelSpacing,
-          });
+            console.log({
+              nivel: index,
+              sopInstanceUID:
+                image.SOPInstanceUID,
+              numberOfFrames,
+              totalPixelMatrixColumns,
+              totalPixelMatrixRows,
+              pixelSpacing,
+            });
+          }
+        } catch (error) {
+          console.warn(
+            "No se pudo leer nivel:",
+            error
+          );
         }
-      } catch (error) {
-        console.warn("No se pudo leer nivel:", error);
       }
-    });
+    );
 
     console.log("========================");
 
@@ -138,16 +216,22 @@ async function initViewer() {
       metadata
     );
 
+    // ---------------------------------------------------------
+    // 7. Construir pirámide WSI
+    // ---------------------------------------------------------
+
     const volumeImages = [];
 
     metadata.forEach((instanceMetadata) => {
       try {
         const image =
-          new DICOMMicroscopyViewer.metadata.VLWholeSlideMicroscopyImage({
-            metadata: instanceMetadata,
-          });
+          new DICOMMicroscopyViewer.metadata
+            .VLWholeSlideMicroscopyImage({
+              metadata: instanceMetadata,
+            });
 
-        const imageFlavor = image.ImageType?.[2];
+        const imageFlavor =
+          image.ImageType?.[2];
 
         console.log(
           "SOP:",
@@ -156,10 +240,8 @@ async function initViewer() {
           imageFlavor
         );
 
-        // IMPORTANTE:
-        // Solo usamos VOLUME para construir la pirámide principal.
-        // LABEL y THUMBNAIL se excluyen porque no forman parte
-        // del volumen piramidal que renderiza VolumeImageViewer.
+        // Solo VOLUME forma parte de la pirámide principal.
+        // LABEL y THUMBNAIL se excluyen.
         if (imageFlavor === "VOLUME") {
           volumeImages.push(image);
         }
@@ -182,15 +264,21 @@ async function initViewer() {
       );
     }
 
+    // ---------------------------------------------------------
+    // 8. Renderizar visor
+    // ---------------------------------------------------------
+
     status.textContent =
-      `Visor inicializado: ${volumeImages.length} niveles VOLUME. ` +
+      `Visor inicializado para caso ${caseId}: ` +
+      `${volumeImages.length} niveles VOLUME. ` +
       "Recuperando frames...";
 
     const viewer =
-      new DICOMMicroscopyViewer.viewer.VolumeImageViewer({
-        client,
-        metadata: volumeImages,
-      });
+      new DICOMMicroscopyViewer.viewer
+        .VolumeImageViewer({
+          client,
+          metadata: volumeImages,
+        });
 
     // Disponible desde DevTools para debugging.
     window.wsiViewer = viewer;
@@ -200,9 +288,13 @@ async function initViewer() {
     });
 
     status.textContent =
-      "Visor inicializado - cargando frames bajo demanda...";
+      `Caso ${caseId} cargado - ` +
+      "frames bajo demanda...";
 
-    console.log("VolumeImageViewer renderizado:", viewer);
+    console.log(
+      "VolumeImageViewer renderizado:",
+      viewer
+    );
   } catch (error) {
     console.error(
       "Error inicializando visor WSI:",
@@ -210,7 +302,8 @@ async function initViewer() {
     );
 
     status.textContent =
-      `Error al inicializar visor: ${error?.message ?? error}`;
+      `Error al inicializar visor: ` +
+      `${error?.message ?? error}`;
   }
 }
 
