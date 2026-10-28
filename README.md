@@ -1,3 +1,286 @@
+## Quick Start
+
+This project uses a Vercel-hosted frontend connected to an Orthanc DICOMweb backend running on the Environ server.
+
+For remote testing, the current development architecture is:
+
+```text
+Vercel
+  ↓
+Cloudflare Quick Tunnel
+  ↓
+Nginx on WSL (:8050)
+  ↓
+SSH tunnel (:8044)
+  ↓
+Orthanc on Environ server (:8042)
+```
+
+> This setup is intended for development, streaming tests, and benchmarks. It is not the final production architecture.
+
+### 1. Start the DICOM-FHIR backend
+
+On the Environ server:
+
+```bash
+cd /media/administrador/Storage1/bvasquez/DICOM-FHIR
+
+git pull --ff-only
+docker compose pull
+docker compose up -d
+docker compose ps
+```
+
+Main services:
+
+```text
+Orthanc / DICOMweb   :8042
+HAPI FHIR            :8080
+OHIF                 :3000
+```
+
+Verify Orthanc:
+
+```bash
+curl http://localhost:8042/system
+```
+
+---
+
+### 2. Create the SSH tunnel
+
+From WSL/local machine:
+
+```bash
+ssh -N -L 8044:localhost:8042 \
+bvasquez@146.155.155.98
+```
+
+Keep this terminal open.
+
+Verify the tunnel from another WSL terminal:
+
+```bash
+curl http://localhost:8044/system
+```
+
+---
+
+### 3. Start or verify Nginx
+
+Nginx listens on:
+
+```text
+localhost:8050
+```
+
+and proxies requests to:
+
+```text
+localhost:8044
+```
+
+The configuration used by this project is available at:
+
+```text
+infra/nginx/nginx.conf
+```
+
+Start Nginx if it is not already running:
+
+```bash
+nginx -c ~/environ/orthanc-local/nginx/nginx.conf
+```
+
+If Nginx is already running, do not start another instance.
+
+Check it with:
+
+```bash
+ps aux | grep nginx
+```
+
+Verify DICOMweb and CORS:
+
+```bash
+curl -i \
+  -H "Origin: https://wsi-viewer-poc.vercel.app" \
+  http://localhost:8050/dicom-web/studies
+```
+
+The response should contain:
+
+```text
+HTTP/1.1 200 OK
+Access-Control-Allow-Origin: *
+```
+
+If the Nginx configuration was modified:
+
+```bash
+nginx -s reload \
+  -c ~/environ/orthanc-local/nginx/nginx.conf
+```
+
+---
+
+### 4. Start the Cloudflare Quick Tunnel
+
+From WSL:
+
+```bash
+cd ~/environ/orthanc-local
+
+./cloudflared tunnel \
+  --protocol http2 \
+  --url http://localhost:8050
+```
+
+Keep this terminal open.
+
+Cloudflare will provide a temporary URL similar to:
+
+```text
+https://xxxxx.trycloudflare.com
+```
+
+The public DICOMweb endpoint will therefore be:
+
+```text
+https://xxxxx.trycloudflare.com/dicom-web
+```
+
+---
+
+### 5. Update Vercel
+
+Go to:
+
+```text
+Vercel
+→ Project
+→ Settings
+→ Environment Variables
+```
+
+Update:
+
+```text
+Name:
+VITE_DICOMWEB_URL
+```
+
+with:
+
+```text
+https://xxxxx.trycloudflare.com/dicom-web
+```
+
+Only the URL must be entered as the value.
+
+Correct:
+
+```text
+https://xxxxx.trycloudflare.com/dicom-web
+```
+
+Incorrect:
+
+```text
+VITE_DICOMWEB_URL=https://xxxxx.trycloudflare.com/dicom-web
+```
+
+Because Vite reads environment variables at build time, create a new Vercel deployment after changing this value.
+
+The deployed viewer is available at:
+
+```text
+https://wsi-viewer-poc.vercel.app
+```
+
+---
+
+### Local frontend development
+
+Running the frontend locally is independent from Vercel.
+
+On the Environ server:
+
+```bash
+cd /media/administrador/Storage1/bvasquez/wsi-viewer-poc
+
+git pull --ff-only
+npm install
+npm run dev
+```
+
+The development server currently runs on:
+
+```text
+http://localhost:8082
+```
+
+The local environment uses:
+
+```text
+VITE_DICOMWEB_URL=/dicom-web
+```
+
+through `.env.local`.
+
+Do not commit `.env.local`.
+
+---
+
+### Quick troubleshooting
+
+Check each layer in order.
+
+Orthanc on server:
+
+```bash
+curl http://localhost:8042/system
+```
+
+SSH tunnel from WSL:
+
+```bash
+curl http://localhost:8044/system
+```
+
+Nginx and CORS:
+
+```bash
+curl -i http://localhost:8050/dicom-web/studies
+```
+
+Cloudflare:
+
+```bash
+curl -i https://xxxxx.trycloudflare.com/dicom-web/studies
+```
+
+If all of these work but the Vercel viewer does not, verify that `VITE_DICOMWEB_URL` contains the current Cloudflare Quick Tunnel URL and redeploy the frontend.
+
+### Development note
+
+The current remote-testing path is:
+
+```text
+Vercel
+→ Cloudflare Quick Tunnel
+→ Nginx
+→ SSH tunnel
+→ Orthanc
+```
+
+Since the Cloudflare Quick Tunnel URL changes when restarted, the Vercel environment variable must currently be updated manually.
+
+A future production architecture should replace this with a stable backend endpoint managed by Environ.
+
+For the full setup guide in Spanish, see:
+[Remote WSI Viewer Setup (ES)](docs/deployment-guide-es.md)
+
 # WSI Viewer POC
 
 Proof of concept for interactive visualization of DICOM Whole Slide Images (WSI) using DICOMweb.
