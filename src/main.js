@@ -5,6 +5,7 @@ import * as DICOMMicroscopyViewer from "dicom-microscopy-viewer";
 
 import {
   resolveImagingForCase,
+  getCases,
 } from "./fhir.js";
 
 const status = document.getElementById("status");
@@ -57,6 +58,27 @@ function rewriteBulkDataURIs(obj, dicomWebUrl) {
     }
   }
 }
+
+getCases()
+  .then((cases) => {
+    console.log("===== WORKLIST SIMPLE =====");
+
+    cases.forEach((c) => {
+      console.log({
+        caseId: c.caseId,
+        patient: c.patient,
+        date: c.date,
+        status: c.status,
+        tissue: c.tissue,
+        diagnosis: c.diagnosis,
+        pathologist: c.pathologist,
+        slideCount: c.slideCount,
+      });
+    });
+  })
+  .catch(console.error);
+
+initViewer();
 
 async function initViewer() {
   try {

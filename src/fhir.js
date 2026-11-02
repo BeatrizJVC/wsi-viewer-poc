@@ -219,6 +219,252 @@ export function resolveDicomWebUrl(endpoint) {
     return stripTrailingSlash(fallbackDicomWebUrl);
 }
 
+function extractCaseIdFromPatientReference(reference = "") {
+    // Patient/pat-137092 -> 137092
+    const match = reference.match(/Patient\/pat-(.+)$/);
+    return match?.[1] ?? reference;
+}
+
+function getPatientDisplay(patient) {
+    if (!patient) {
+        return "Sin información";
+    }
+
+    const name = patient.name?.[0];
+
+    if (name) {
+        const family = name.family ?? "";
+        const given = (name.given ?? []).join(" ");
+
+        const fullName = `${given} ${family}`.trim();
+
+        if (fullName) {
+            return fullName;
+        }
+
+        if (name.text) {
+            return name.text;
+        }
+    }
+
+    const identifier =
+        patient.identifier?.[0]?.value;
+
+    return identifier ?? patient.id ?? "Sin información";
+}
+
+function getTissueFromImagingStudy(imagingStudy) {
+    const series = imagingStudy?.series ?? [];
+
+    for (const item of series) {
+        const bodySite = item.bodySite;
+
+        if (!bodySite) {
+            continue;
+        }
+
+        if (bodySite.display) {
+            return bodySite.display;
+        }
+
+        if (bodySite.text) {
+            return bodySite.text;
+        }
+
+        if (bodySite.code) {
+            return bodySite.code;
+        }
+    }
+
+    return "No especificado";
+}
+
+function getSlideCount(imagingStudy) {
+    if (
+        typeof imagingStudy?.numberOfInstances === "number"
+    ) {
+        return imagingStudy.numberOfInstances;
+    }
+
+    return (imagingStudy?.series ?? []).reduce(
+        (total, series) =>
+            total + (series.instance?.length ?? 0),
+        0
+    );
+}
+
+function getCaseDate(diagnosticReport) {
+    return (
+        diagnosticReport.effectiveDateTime ??
+        diagnosticReport.issued ??
+        diagnosticReport.meta?.lastUpdated ??
+        null
+    );
+}
+
+function getDiagnosis(
+    diagnosticReport,
+    imagingStudy
+) {
+    return (
+        diagnosticReport.conclusion ??
+        diagnosticReport.code?.text ??
+        imagingStudy?.description ??
+        "Sin diagnóstico disponible"
+    );
+}
+
+/**
+ * Obtiene todos los casos disponibles para la Worklist.
+ *
+ * Flujo:
+ *
+ * DiagnosticReport
+ *      ↓
+ * Patient
+ *      ↓
+ * ImagingStudy
+ *      ↓
+ * objeto simplificado para la UI
+ */
+export async function getCases() {
+    const url =
+        `${stripTrailingSlash(fhirBaseUrl)}` +
+        `/DiagnosticReport?_count=100&_format=json`;
+
+    const bundle = await fetchFhirJson(url);
+
+    const reports = (bundle.entry ?? [])
+        .map((entry) => entry.resource)
+        .filter(
+            (resource) =>
+                resource?.resourceType === "DiagnosticReport"
+        );
+
+    console.log(
+        "DiagnosticReport encontrados:",
+        reports.length
+    );
+
+    const cases = await Promise.all(
+        reports.map(async (diagnosticReport) => {
+            try {
+                const patientReference =
+                    diagnosticReport.subject?.reference;
+
+                const imagingStudyReference =
+                    diagnosticReport.imagingStudy?.[0]
+                        ?.reference;
+
+                if (
+                    !patientReference ||
+                    !imagingStudyReference
+                ) {
+                    console.warn(
+                        "DiagnosticReport omitido por referencias incompletas:",
+                        diagnosticReport.id
+                    );
+
+                    return null;
+                }
+
+                const caseId =
+                    extractCaseIdFromPatientReference(
+                        patientReference
+                    );
+
+                const [
+                    patient,
+                    imagingStudy,
+                ] = await Promise.all([
+                    getFhirResourceByReference(
+                        patientReference
+                    ),
+                    getFhirResourceByReference(
+                        imagingStudyReference
+                    ),
+                ]);
+
+                const pathologist =
+                    diagnosticReport.performer?.[0]
+                        ?.display ??
+                    "No especificado";
+
+                return {
+                    caseId,
+
+                    diagnosticReportId:
+                        diagnosticReport.id,
+
+                    patientId:
+                        patient.id,
+
+                    patient:
+                        getPatientDisplay(patient),
+
+                    date:
+                        getCaseDate(diagnosticReport),
+
+                    status:
+                        diagnosticReport.status ??
+                        "unknown",
+
+                    tissue:
+                        getTissueFromImagingStudy(
+                            imagingStudy
+                        ),
+
+                    diagnosis:
+                        getDiagnosis(
+                            diagnosticReport,
+                            imagingStudy
+                        ),
+
+                    pathologist,
+
+                    slideCount:
+                        getSlideCount(imagingStudy),
+
+                    imagingStudyReference,
+
+                    imagingStudyId:
+                        imagingStudy.id,
+
+                    studyDescription:
+                        imagingStudy.description ??
+                        null,
+                };
+            } catch (error) {
+                console.warn(
+                    "No se pudo construir caso desde DiagnosticReport:",
+                    diagnosticReport.id,
+                    error
+                );
+
+                return null;
+            }
+        })
+    );
+
+    const validCases = cases.filter(Boolean);
+
+    const uniqueCases = Array.from(
+        new Map(
+            validCases.map((item) => [
+                `${item.caseId}::${item.imagingStudyReference}`,
+                item,
+            ])
+        ).values()
+    );
+
+    return uniqueCases.sort((a, b) => {
+        if (!a.date) return 1;
+        if (!b.date) return -1;
+
+        return new Date(b.date) - new Date(a.date);
+    });
+}
+
 /**
  * Resuelve toda la cadena:
  *
