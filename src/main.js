@@ -11,6 +11,10 @@ import {
   renderWorklist,
 } from "./worklist.js";
 import "./worklist.css";
+import {
+  renderSlideSelector,
+} from "./slide-selector.js";
+import "./slide-selector.css";
 
 const status = document.getElementById("status");
 
@@ -126,10 +130,35 @@ async function initViewer() {
       imagingStudy,
       endpoint,
       studyInstanceUID,
-      seriesInstanceUID,
+      seriesInstanceUID: resolvedSeriesInstanceUID,
       instances,
       dicomWebUrl,
     } = await resolveImagingForCase(caseId);
+
+    const requestedSeriesUID =
+      new URLSearchParams(
+        window.location.search
+      ).get("seriesUID");
+
+    const availableSeriesUIDs =
+      (imagingStudy?.series ?? [])
+        .map((item) => item?.uid)
+        .filter(Boolean);
+
+    const seriesInstanceUID =
+      requestedSeriesUID &&
+      availableSeriesUIDs.includes(
+        requestedSeriesUID
+      )
+        ? requestedSeriesUID
+        : resolvedSeriesInstanceUID;
+
+    console.log(
+      "Serie WSI activa:",
+      seriesInstanceUID,
+      `(${availableSeriesUIDs.length} serie(s) en ImagingStudy)`
+    );
+
 
     console.log(
       "DiagnosticReport:",
@@ -289,9 +318,12 @@ async function initViewer() {
           imageFlavor
         );
 
-        // Solo VOLUME forma parte de la pirámide principal.
-        // LABEL y THUMBNAIL se excluyen.
-        if (imageFlavor === "VOLUME") {
+        // VOLUME + THUMBNAIL forman la pirámide de visualización.
+        // LABEL se excluye del visor principal.
+        if (
+          imageFlavor === "VOLUME" ||
+          imageFlavor === "THUMBNAIL"
+        ) {
           volumeImages.push(image);
         }
       } catch (error) {
@@ -303,13 +335,13 @@ async function initViewer() {
     });
 
     console.log(
-      "Imágenes VOLUME encontradas:",
+      "Imágenes VOLUME/THUMBNAIL encontradas:",
       volumeImages.length
     );
 
     if (volumeImages.length === 0) {
       throw new Error(
-        "No se encontraron instancias VOLUME."
+        "No se encontraron instancias VOLUME/THUMBNAIL."
       );
     }
 
@@ -336,7 +368,14 @@ async function initViewer() {
       container: "viewport",
     });
 
-    status.textContent =
+    renderSlideSelector({
+      imagingStudy,
+      activeSeriesUID:
+        seriesInstanceUID,
+    });
+
+
+status.textContent =
       `Caso ${caseId} cargado - ` +
       "frames bajo demanda...";
 
