@@ -1,0 +1,390 @@
+:root {
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system,
+    BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #172033;
+  background: #f4f6f8;
+}
+
+body {
+  margin: 0;
+}
+
+.worklist {
+  min-height: 100vh;
+  box-sizing: border-box;
+  padding: 32px;
+  background: #f4f6f8;
+}
+
+.worklist__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 24px;
+  max-width: 1500px;
+  margin: 0 auto 24px;
+}
+
+.worklist__eyebrow,
+.case-panel__kicker {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #52627a;
+}
+
+.worklist h1 {
+  margin: 0;
+  font-size: 32px;
+  line-height: 1.2;
+}
+
+.worklist__subtitle {
+  margin: 8px 0 0;
+  color: #667085;
+}
+
+.worklist__summary {
+  padding: 10px 14px;
+  border: 1px solid #d8dee8;
+  border-radius: 999px;
+  background: #ffffff;
+  font-size: 13px;
+  font-weight: 600;
+  color: #475467;
+}
+
+.worklist__filters {
+  display: grid;
+  grid-template-columns:
+    minmax(280px, 1fr) minmax(160px, 220px)
+    minmax(160px, 220px);
+  gap: 12px;
+  max-width: 1500px;
+  margin: 0 auto 18px;
+}
+
+.worklist__filters label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #475467;
+}
+
+.worklist__filters input,
+.worklist__filters select {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 42px;
+  padding: 10px 12px;
+  border: 1px solid #cfd6e1;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #172033;
+  font: inherit;
+  outline: none;
+}
+
+.worklist__filters input:focus,
+.worklist__filters select:focus {
+  border-color: #667085;
+  box-shadow: 0 0 0 3px rgb(102 112 133 / 12%);
+}
+
+.worklist__layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 18px;
+  max-width: 1500px;
+  margin: 0 auto;
+  align-items: start;
+}
+
+.worklist__table-card,
+.case-panel {
+  border: 1px solid #dfe4ec;
+  border-radius: 12px;
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgb(16 24 40 / 4%);
+}
+
+.worklist__table-scroll {
+  overflow-x: auto;
+}
+
+.worklist__table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.worklist__table th,
+.worklist__table td {
+  padding: 14px 16px;
+  border-bottom: 1px solid #edf0f4;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.worklist__table th {
+  background: #f8fafc;
+  font-size: 12px;
+  font-weight: 700;
+  color: #52627a;
+}
+
+.worklist__table th:nth-child(1) {
+  width: 18%;
+}
+
+.worklist__table th:nth-child(2) {
+  width: 12%;
+}
+
+.worklist__table th:nth-child(3) {
+  width: 14%;
+}
+
+.worklist__table th:nth-child(4) {
+  width: 12%;
+}
+
+.worklist__table tbody tr {
+  cursor: pointer;
+  transition:
+    background 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.worklist__table tbody tr:hover {
+  background: #f8fafc;
+}
+
+.worklist__table tbody tr.is-selected {
+  background: #eef4ff;
+  box-shadow: inset 3px 0 0 #52627a;
+}
+
+.worklist__case-id {
+  font-weight: 700;
+}
+
+.worklist__diagnosis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.worklist__badge {
+  display: inline-flex;
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: #eef2f6;
+  font-size: 12px;
+  font-weight: 700;
+  color: #344054;
+}
+
+.worklist__empty {
+  padding: 34px !important;
+  text-align: center !important;
+  color: #667085;
+}
+
+.case-panel {
+  position: sticky;
+  top: 24px;
+  min-height: 320px;
+}
+
+.case-panel__empty {
+  display: flex;
+  min-height: 320px;
+  box-sizing: border-box;
+  padding: 32px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  color: #667085;
+}
+
+.case-panel__empty h2 {
+  margin: 12px 0 4px;
+  font-size: 18px;
+  color: #344054;
+}
+
+.case-panel__empty p {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.case-panel__icon {
+  display: grid;
+  width: 52px;
+  height: 52px;
+  place-items: center;
+  border-radius: 12px;
+  background: #eef2f6;
+  font-size: 12px;
+  font-weight: 800;
+  color: #52627a;
+}
+
+.case-panel__content {
+  padding: 22px;
+}
+
+.case-panel__heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+  padding-bottom: 18px;
+  border-bottom: 1px solid #edf0f4;
+}
+
+.case-panel__heading h2 {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-size: 20px;
+}
+
+.case-panel__status {
+  flex: none;
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: #eef2f6;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.case-panel__facts {
+  margin: 0;
+  padding: 18px 0;
+  border-bottom: 1px solid #edf0f4;
+}
+
+.case-panel__facts > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.case-panel__facts > div:last-child {
+  margin-bottom: 0;
+}
+
+.case-panel__facts dt {
+  color: #667085;
+}
+
+.case-panel__facts dd {
+  margin: 0;
+  font-weight: 600;
+  text-align: right;
+}
+
+.case-panel__diagnosis {
+  padding: 18px 0;
+}
+
+.case-panel__diagnosis span {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #667085;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.case-panel__diagnosis p {
+  margin: 0;
+  line-height: 1.55;
+}
+
+.case-panel__open,
+.viewer-nav__back {
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+}
+
+.case-panel__open {
+  width: 100%;
+  padding: 12px 16px;
+  background: #172033;
+  color: #ffffff;
+}
+
+.case-panel__open:hover {
+  background: #28364f;
+}
+
+.viewer-nav {
+  display: flex;
+  min-height: 52px;
+  box-sizing: border-box;
+  padding: 8px 14px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid #dfe4ec;
+  background: #ffffff;
+}
+
+.viewer-nav__back {
+  padding: 9px 12px;
+  background: #eef2f6;
+  color: #344054;
+}
+
+.viewer-nav__case {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  max-width: 70%;
+}
+
+.viewer-nav__label {
+  font-size: 12px;
+  color: #667085;
+}
+
+.viewer-nav__case strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 900px) {
+  .worklist {
+    padding: 20px 14px;
+  }
+
+  .worklist__header {
+    flex-direction: column;
+  }
+
+  .worklist__filters {
+    grid-template-columns: 1fr;
+  }
+
+  .worklist__layout {
+    grid-template-columns: 1fr;
+  }
+
+  .case-panel {
+    position: static;
+  }
+}

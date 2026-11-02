@@ -5,8 +5,12 @@ import * as DICOMMicroscopyViewer from "dicom-microscopy-viewer";
 
 import {
   resolveImagingForCase,
-  getCases,
 } from "./fhir.js";
+import {
+  prepareViewerMode,
+  renderWorklist,
+} from "./worklist.js";
+import "./worklist.css";
 
 const status = document.getElementById("status");
 
@@ -59,26 +63,33 @@ function rewriteBulkDataURIs(obj, dicomWebUrl) {
   }
 }
 
-getCases()
-  .then((cases) => {
-    console.log("===== WORKLIST SIMPLE =====");
+async function bootstrap() {
+  const params =
+    new URLSearchParams(window.location.search);
 
-    cases.forEach((c) => {
-      console.log({
-        caseId: c.caseId,
-        patient: c.patient,
-        date: c.date,
-        status: c.status,
-        tissue: c.tissue,
-        diagnosis: c.diagnosis,
-        pathologist: c.pathologist,
-        slideCount: c.slideCount,
-      });
-    });
-  })
-  .catch(console.error);
+  const caseId = params.get("caseId");
 
-initViewer();
+  if (caseId) {
+    prepareViewerMode(caseId);
+    await initViewer();
+    return;
+  }
+
+  await renderWorklist();
+}
+
+bootstrap().catch((error) => {
+  console.error(
+    "Error inicializando aplicación:",
+    error
+  );
+
+  if (status) {
+    status.textContent =
+      `Error inicializando aplicación: ` +
+      `${error?.message ?? error}`;
+  }
+});
 
 async function initViewer() {
   try {
