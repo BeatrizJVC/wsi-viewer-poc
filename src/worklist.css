@@ -388,3 +388,124 @@ body {
     position: static;
   }
 }
+
+
+.feedback-card {
+  margin: 4px 0 18px;
+  padding: 18px;
+  border: 1px solid #dfe4ec;
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+.feedback-card__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+  margin-bottom: 14px;
+}
+
+.feedback-card__eyebrow {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #667085;
+}
+
+.feedback-card h3 {
+  margin: 0;
+  font-size: 15px;
+  color: #344054;
+}
+
+.feedback-card__saved {
+  flex: none;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #eef2f6;
+  font-size: 11px;
+  font-weight: 700;
+  color: #344054;
+}
+
+.feedback-card__agreement {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 14px;
+  padding: 0;
+  border: 0;
+}
+
+.feedback-card__agreement legend {
+  margin-bottom: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #475467;
+}
+
+.feedback-card__agreement label {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.feedback-card__field {
+  display: block;
+  margin-top: 12px;
+}
+
+.feedback-card__field > span {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #475467;
+}
+
+.feedback-card__field textarea {
+  box-sizing: border-box;
+  width: 100%;
+  resize: vertical;
+  min-height: 72px;
+  padding: 9px 10px;
+  border: 1px solid #cfd6e1;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #172033;
+  font: inherit;
+}
+
+.feedback-card__field textarea:focus {
+  border-color: #667085;
+  outline: none;
+  box-shadow: 0 0 0 3px rgb(102 112 133 / 12%);
+}
+
+.feedback-card__notice {
+  margin: 12px 0;
+  font-size: 11px;
+  line-height: 1.45;
+  color: #667085;
+}
+
+.feedback-card__save {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid #cfd6e1;
+  border-radius: 8px;
+  background: #ffffff;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+  color: #344054;
+}
+
+.feedback-card__save:hover {
+  background: #f2f4f7;
+}

@@ -2,6 +2,41 @@ import { getCases } from "./fhir.js";
 
 const WORKLIST_ID = "worklist-root";
 const VIEWER_NAV_ID = "viewer-nav";
+const FEEDBACK_STORAGE_KEY =
+  "oncomets-ai-feedback-v1";
+
+function readFeedbackStore() {
+  try {
+    return JSON.parse(
+      localStorage.getItem(FEEDBACK_STORAGE_KEY) ??
+      "{}"
+    );
+  } catch {
+    return {};
+  }
+}
+
+function getSavedFeedback(caseId) {
+  const store = readFeedbackStore();
+  return store[caseId] ?? null;
+}
+
+function saveFeedback(caseId, feedback) {
+  const store = readFeedbackStore();
+
+  store[caseId] = {
+    ...feedback,
+    caseId,
+    updatedAt: new Date().toISOString(),
+  };
+
+  localStorage.setItem(
+    FEEDBACK_STORAGE_KEY,
+    JSON.stringify(store)
+  );
+
+  return store[caseId];
+}
 
 function formatDate(value) {
   if (!value) {
@@ -385,6 +420,86 @@ export async function renderWorklist() {
           <p>${escapeHtml(item.diagnosis)}</p>
         </div>
 
+        <section class="feedback-card">
+          <div class="feedback-card__header">
+            <div>
+              <span class="feedback-card__eyebrow">
+                Evaluación del patólogo
+              </span>
+              <h3>Validación del resultado IA</h3>
+            </div>
+            <span
+              class="feedback-card__saved"
+              id="feedback-saved-indicator"
+              hidden
+            >
+              Guardado
+            </span>
+          </div>
+
+          <fieldset class="feedback-card__agreement">
+            <legend>Evaluación del resultado IA</legend>
+
+            <label>
+              <input
+                type="radio"
+                name="ai-agreement"
+                value="agree"
+              />
+              <span>De acuerdo</span>
+            </label>
+
+            <label>
+              <input
+                type="radio"
+                name="ai-agreement"
+                value="partial"
+              />
+              <span>Parcialmente de acuerdo</span>
+            </label>
+
+            <label>
+              <input
+                type="radio"
+                name="ai-agreement"
+                value="disagree"
+              />
+              <span>En desacuerdo</span>
+            </label>
+          </fieldset>
+
+          <label class="feedback-card__field">
+            <span>Corrección / diagnóstico propuesto</span>
+            <textarea
+              id="feedback-correction"
+              rows="3"
+              placeholder="Opcional"
+            ></textarea>
+          </label>
+
+          <label class="feedback-card__field">
+            <span>Comentario</span>
+            <textarea
+              id="feedback-comment"
+              rows="3"
+              placeholder="Observaciones del patólogo"
+            ></textarea>
+          </label>
+
+          <p class="feedback-card__notice">
+            Este feedback se guarda localmente en este navegador.
+            No modifica el resultado IA ni FHIR.
+          </p>
+
+          <button
+            type="button"
+            class="feedback-card__save"
+            id="feedback-save"
+          >
+            Guardar feedback
+          </button>
+        </section>
+
         <button
           type="button"
           class="case-panel__open"
@@ -394,6 +509,90 @@ export async function renderWorklist() {
         </button>
       </div>
     `;
+
+    const savedFeedback =
+      getSavedFeedback(item.caseId);
+
+    if (savedFeedback) {
+      const agreementInput =
+        document.querySelector(
+          `input[name="ai-agreement"][value="${savedFeedback.agreement}"]`
+        );
+
+      if (agreementInput) {
+        agreementInput.checked = true;
+      }
+
+      const correction =
+        document.getElementById(
+          "feedback-correction"
+        );
+      const comment =
+        document.getElementById(
+          "feedback-comment"
+        );
+      const indicator =
+        document.getElementById(
+          "feedback-saved-indicator"
+        );
+
+      if (correction) {
+        correction.value =
+          savedFeedback.correctedDiagnosis ?? "";
+      }
+
+      if (comment) {
+        comment.value =
+          savedFeedback.comment ?? "";
+      }
+
+      if (indicator) {
+        indicator.hidden = false;
+      }
+    }
+
+    document
+      .getElementById("feedback-save")
+      ?.addEventListener("click", () => {
+        const agreement =
+          document.querySelector(
+            'input[name="ai-agreement"]:checked'
+          )?.value ?? "";
+
+        const correctedDiagnosis =
+          document.getElementById(
+            "feedback-correction"
+          )?.value.trim() ?? "";
+
+        const comment =
+          document.getElementById(
+            "feedback-comment"
+          )?.value.trim() ?? "";
+
+        if (!agreement) {
+          window.alert(
+            "Selecciona el nivel de acuerdo antes de guardar."
+          );
+          return;
+        }
+
+        saveFeedback(item.caseId, {
+          aiResult: item.diagnosis,
+          agreement,
+          correctedDiagnosis,
+          comment,
+        });
+
+        const indicator =
+          document.getElementById(
+            "feedback-saved-indicator"
+          );
+
+        if (indicator) {
+          indicator.hidden = false;
+          indicator.textContent = "Guardado";
+        }
+      });
 
     document
       .getElementById("case-open-viewer")
