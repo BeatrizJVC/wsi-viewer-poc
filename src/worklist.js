@@ -87,6 +87,9 @@ function formatTissue(value) {
 function getSearchText(item) {
   return [
     item.caseId,
+    item.studyDescription,
+    formatTissue(item.tissue),
+    formatStatus(item.status),
     item.patient,
     item.tissue,
     item.status,
@@ -189,10 +192,11 @@ function showViewer() {
     ?.remove();
 }
 
-function openCase(caseId) {
+function openCase(caseId, imagingStudyReference) {
   const url = new URL(window.location.href);
   url.search = "";
   url.searchParams.set("caseId", caseId);
+  url.searchParams.set("imagingStudy", imagingStudyReference);
   window.location.href = url.toString();
 }
 
@@ -273,7 +277,7 @@ export async function renderWorklist() {
         <input
           id="worklist-search"
           type="search"
-          placeholder="ID de caso, resultado IA o tejido"
+          placeholder="Caso, biopsia, paciente, tejido o diagnóstico"
           autocomplete="off"
         />
       </label>
@@ -303,7 +307,7 @@ export async function renderWorklist() {
                 <th>Fecha</th>
                 <th>Tejido</th>
                 <th>Estado</th>
-                <th>Resultado IA</th>
+                <th>Informe FHIR</th>
               </tr>
             </thead>
             <tbody id="worklist-body">
@@ -410,13 +414,13 @@ export async function renderWorklist() {
             <dd>${escapeHtml(formatTissue(item.tissue))}</dd>
           </div>
           <div>
-            <dt>Imagen</dt>
-            <dd>WSI disponible</dd>
+            <dt>Estudio</dt>
+            <dd>${escapeHtml(item.studyDescription || item.imagingStudyReference)}</dd>
           </div>
         </dl>
 
         <div class="case-panel__diagnosis">
-          <span>Resultado IA</span>
+          <span>Informe FHIR</span>
           <p>${escapeHtml(item.diagnosis)}</p>
         </div>
 
@@ -426,7 +430,7 @@ export async function renderWorklist() {
               <span class="feedback-card__eyebrow">
                 Evaluación del patólogo
               </span>
-              <h3>Validación del resultado IA</h3>
+              <h3>Feedback inicial del informe</h3>
             </div>
             <span
               class="feedback-card__saved"
@@ -438,7 +442,7 @@ export async function renderWorklist() {
           </div>
 
           <fieldset class="feedback-card__agreement">
-            <legend>Evaluación del resultado IA</legend>
+            <legend>Evaluación del informe FHIR</legend>
 
             <label>
               <input
@@ -488,7 +492,7 @@ export async function renderWorklist() {
 
           <p class="feedback-card__notice">
             Este feedback se guarda localmente en este navegador.
-            No modifica el resultado IA ni FHIR.
+            No modifica el informe FHIR ni FHIR.
           </p>
 
           <button
@@ -576,12 +580,15 @@ export async function renderWorklist() {
           return;
         }
 
+        try {
         saveFeedback(item.caseId, {
+          source: "FHIR DiagnosticReport (puede contener correcciones)",
           aiResult: item.diagnosis,
           agreement,
           correctedDiagnosis,
           comment,
         });
+        } catch { window.alert("No se pudo guardar el feedback local. Revise el almacenamiento del navegador."); return; }
 
         const indicator =
           document.getElementById(
@@ -598,11 +605,14 @@ export async function renderWorklist() {
       .getElementById("case-open-viewer")
       ?.addEventListener(
         "click",
-        () => openCase(item.caseId)
+        () => openCase(item.caseId, item.imagingStudyReference)
       );
   }
 
   function renderRows(items) {
+    if (selectedKey && !items.some(item => caseKey(item) === selectedKey)) {
+      selectedKey = null; renderPanel(null);
+    }
     summary.textContent =
       `${items.length} de ${cases.length} ` +
       `${cases.length === 1 ? "caso" : "casos"}`;

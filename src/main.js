@@ -1,4 +1,11 @@
+import { renderViewerTools } from './viewer-tools.js';
+import { installBenchmarkV32 } from "./benchmark-v32.js";
+import { installBenchmarkV33 } from "./benchmark-v33.js";
+import { installBenchmarkV31 } from "./benchmark-v31.js";
 import "ol/ol.css";
+import { installViewerBenchmarkV2 } from "./benchmark-v2.js";
+import "./benchmark-v2.css";
+
 
 import * as DICOMwebClient from "dicomweb-client";
 import * as DICOMMicroscopyViewer from "dicom-microscopy-viewer";
@@ -128,30 +135,18 @@ async function initViewer() {
     const {
       diagnosticReport,
       imagingStudy,
+      imagingStudyReference,
       endpoint,
       studyInstanceUID,
-      seriesInstanceUID: resolvedSeriesInstanceUID,
+      seriesInstanceUID,
       instances,
       dicomWebUrl,
-    } = await resolveImagingForCase(caseId);
+    } = await resolveImagingForCase(caseId, {
+      imagingStudyReference: params.get("imagingStudy"),
+      seriesUID: params.get("seriesUID"),
+    });
 
-    const requestedSeriesUID =
-      new URLSearchParams(
-        window.location.search
-      ).get("seriesUID");
-
-    const availableSeriesUIDs =
-      (imagingStudy?.series ?? [])
-        .map((item) => item?.uid)
-        .filter(Boolean);
-
-    const seriesInstanceUID =
-      requestedSeriesUID &&
-      availableSeriesUIDs.includes(
-        requestedSeriesUID
-      )
-        ? requestedSeriesUID
-        : resolvedSeriesInstanceUID;
+    const availableSeriesUIDs = (imagingStudy.series ?? []).filter(series => series?.uid);
 
     console.log(
       "Serie WSI activa:",
@@ -359,23 +354,45 @@ async function initViewer() {
         .VolumeImageViewer({
           client,
           metadata: volumeImages,
+          // Algunas miniaturas (caso 137092) codifican JPEG monocromático
+          // aunque declaran SamplesPerPixel=3. Usar la pirámide VOLUME
+          // evita ese frame auxiliar incompatible sin alterar los DICOM.
+          skipThumbnails: true,
         });
 
     // Disponible desde DevTools para debugging.
     window.wsiViewer = viewer;
 
     viewer.render({
-      container: "viewport",
+      // The viewer forwards this value to its DOM event publisher, which needs an EventTarget.
+      container: document.getElementById("viewport"),
     });
+
+    const baseImage = volumeImages.filter(image => image.ImageType?.[2] === "VOLUME")
+      .reduce((base, image) => !base || image.TotalPixelMatrixColumns > base.TotalPixelMatrixColumns ? image : base, null);
+    renderViewerTools({ viewer, context: { caseId, imagingStudyReference, studyInstanceUID, seriesUID: seriesInstanceUID },
+      dimensions: baseImage ? { width: baseImage.TotalPixelMatrixColumns, height: baseImage.TotalPixelMatrixRows } : null });
+
+    // Benchmark FOV V3.2, independent from V2/V3/V3.1.
+    installBenchmarkV32(viewer);
+    installBenchmarkV33(viewer, { client });
+
+    // Automatic spatial benchmark V3.1, separate from V2/V3.
+    installBenchmarkV31(viewer);
+
+    // Benchmark V2: activo solo en desarrollo o con ?benchmark=1.
+    // No modifica el flujo DICOMweb ni el renderizado clínico.
+    installViewerBenchmarkV2({ viewer, volumeImages, container: "viewport" });
 
     renderSlideSelector({
       imagingStudy,
+      imagingStudyReference,
       activeSeriesUID:
         seriesInstanceUID,
     });
 
 
-status.textContent =
+    status.textContent =
       `Caso ${caseId} cargado - ` +
       "frames bajo demanda...";
 
@@ -394,5 +411,3 @@ status.textContent =
       `${error?.message ?? error}`;
   }
 }
-
-initViewer();

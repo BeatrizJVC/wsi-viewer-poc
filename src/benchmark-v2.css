@@ -1,0 +1,14 @@
+.oncomets-bench-v2 {
+  position: fixed; z-index: 2147483600; top: 85px; right: 16px;
+  width: 280px; box-sizing: border-box; border: 1px solid #5b9bbc;
+  border-radius: 9px; background: #12243a; color: #f3f8ff;
+  box-shadow: 0 8px 24px #0006; padding: 12px;
+  font: 12px/1.45 Arial, sans-serif;
+}
+.oncomets-bench-v2 strong { font-size: 14px; display: block; }
+.oncomets-bench-v2 .wsi-bench-sub { display: block; color: #a4c9db; margin-bottom: 7px; }
+.oncomets-bench-v2 .wsi-bench-state { padding: 7px; background: #213b55; border-radius: 5px; min-height: 40px; }
+.oncomets-bench-v2 .wsi-bench-buttons { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.oncomets-bench-v2 button { cursor: pointer; border-radius: 5px; padding: 6px 8px; background: #daeffb;
+  border: 0; color: #0e273e; font-size: 11px; font-weight: 600; }
+.oncomets-bench-v2 .wsi-bench-count { margin-top: 7px; font-size: 11px; color: #afcadd; }
