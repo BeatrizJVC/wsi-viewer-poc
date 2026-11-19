@@ -1,3 +1,4 @@
+import { renderViewerTools } from './viewer-tools.js';
 import "ol/ol.css";
 
 import * as DICOMwebClient from "dicomweb-client";
@@ -128,37 +129,16 @@ async function initViewer() {
     const {
       diagnosticReport,
       imagingStudy,
+      imagingStudyReference,
       endpoint,
       studyInstanceUID,
-      seriesInstanceUID: resolvedSeriesInstanceUID,
+      seriesInstanceUID,
       instances,
       dicomWebUrl,
-    } = await resolveImagingForCase(caseId);
-
-    const requestedSeriesUID =
-      new URLSearchParams(
-        window.location.search
-      ).get("seriesUID");
-
-    const availableSeriesUIDs =
-      (imagingStudy?.series ?? [])
-        .map((item) => item?.uid)
-        .filter(Boolean);
-
-    const seriesInstanceUID =
-      requestedSeriesUID &&
-      availableSeriesUIDs.includes(
-        requestedSeriesUID
-      )
-        ? requestedSeriesUID
-        : resolvedSeriesInstanceUID;
-
-    console.log(
-      "Serie WSI activa:",
-      seriesInstanceUID,
-      `(${availableSeriesUIDs.length} serie(s) en ImagingStudy)`
-    );
-
+    } = await resolveImagingForCase(caseId, {
+      imagingStudyReference: params.get("imagingStudy"),
+      seriesUID: params.get("seriesUID"),
+    });
 
     console.log(
       "DiagnosticReport:",
@@ -368,8 +348,19 @@ async function initViewer() {
       container: "viewport",
     });
 
+    renderViewerTools({
+      viewer,
+      context: {
+        caseId,
+        imagingStudyReference,
+        studyInstanceUID,
+        seriesUID: seriesInstanceUID,
+      },
+    });
+
     renderSlideSelector({
       imagingStudy,
+      imagingStudyReference,
       activeSeriesUID:
         seriesInstanceUID,
     });
@@ -394,5 +385,3 @@ status.textContent =
       `${error?.message ?? error}`;
   }
 }
-
-initViewer();

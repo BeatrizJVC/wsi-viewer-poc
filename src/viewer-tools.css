@@ -1,0 +1,18 @@
+.viewer-tools { display:flex; flex-wrap:wrap; gap:6px; padding:10px; background:#202b3c; color:#fff; }
+.viewer-tools button { background:#34445c; color:white; border:1px solid #7e90ab; border-radius:5px; padding:8px 10px; cursor:pointer; }
+.viewer-tools button[aria-pressed=true] { background:#176969; border-color:#73e4d4; }
+.viewer-tools button:focus-visible { outline:3px solid #73e4d4; }
+.viewer-tools output { padding:8px; }
+.tool-status { margin:0; padding:5px 12px; background:#202b3c; color:#dde7f5; font-size:13px; }
+.viewer-layout { display:flex; flex:1; min-height:350px; overflow:hidden; }
+.viewer-layout #viewport { min-width:0; width:auto; }
+.model-panel { width:320px; flex-shrink:0; overflow:auto; padding:16px; box-sizing:border-box; background:#f4f6f8; color:#172033; font-size:14px; }
+.model-panel h2 { font-size:18px; }
+.model-panel input { max-width:100%; margin:10px 0; }
+.model-panel details { padding:12px 0; border-bottom:1px solid #cdd5df; }
+.model-panel summary { cursor:pointer; font-weight:600; }
+.model-panel pre { white-space:pre-wrap; overflow-wrap:anywhere; }
+@media(max-width:760px) { .viewer-layout { flex-direction:column; overflow:auto; } .viewer-layout #viewport { min-height:55vh; flex-shrink:0; } .model-panel { width:100%; overflow:visible; } }
+.model-panel form { display:grid; gap:8px; margin:12px 0; }
+.model-panel form label { display:grid; gap:5px; }
+.model-panel form textarea, .model-panel form select { width:100%; box-sizing:border-box; }

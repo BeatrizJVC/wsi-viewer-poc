@@ -29,80 +29,71 @@ async function fetchFhirJson(url) {
     return response.json();
 }
 
-/**
- * Busca el DiagnosticReport asociado al paciente/caso.
- *
- * Convención actual de DICOM-FHIR:
- *   caseId = 137092
- *   Patient = Patient/pat-137092
- */
-export async function getDiagnosticReportByCaseId(caseId) {
-    if (!caseId) {
-        throw new Error("No se indicó caseId.");
-    }
-
-    const normalizedCaseId = caseId
-        .replace(/^pat-/, "")
-        .replace(/^imgstudy-/, "");
-
-    const patientReference = `Patient/pat-${normalizedCaseId}`;
-
-    const url =
-        `${stripTrailingSlash(fhirBaseUrl)}` +
-        `/DiagnosticReport?subject=${encodeURIComponent(patientReference)}` +
-        `&_format=json`;
-
-    const bundle = await fetchFhirJson(url);
-
-    const entries = bundle.entry ?? [];
-
-    if (entries.length === 0) {
-        throw new Error(
-            `No se encontró DiagnosticReport para ${patientReference}.`
-        );
-    }
-
-    // Por ahora usamos el primer DiagnosticReport que tenga ImagingStudy.
-    const reportEntry = entries.find((entry) => {
-        const resource = entry.resource;
-        return (
-            resource?.resourceType === "DiagnosticReport" &&
-            Array.isArray(resource.imagingStudy) &&
-            resource.imagingStudy.length > 0
-        );
-    });
-
-    if (!reportEntry) {
-        throw new Error(
-            `Se encontraron DiagnosticReport para ${patientReference}, ` +
-            "pero ninguno contiene referencia a ImagingStudy."
-        );
-    }
-
-    return reportEntry.resource;
+function normalizeFhirReference(reference, resourceType) {
+    if (typeof reference !== "string") return null;
+    const base = new URL(`${stripTrailingSlash(fhirBaseUrl)}/`, globalThis.location?.href).href;
+    const relative = reference.startsWith(base)
+        ? reference.slice(base.length)
+        : reference.replace(/^\//, "");
+    const [type, id, extra] = relative.split("/");
+    if (type !== resourceType || extra !== undefined || !/^[A-Za-z0-9.-]{1,64}$/.test(id ?? "") ||
+        id === "." || id === "..") return null;
+    return relative;
 }
 
-/**
- * Obtiene la referencia ImagingStudy desde DiagnosticReport.
- */
-export function extractImagingStudyReference(diagnosticReport) {
-    const references = diagnosticReport?.imagingStudy ?? [];
+function getStudyReferences(report) {
+    return (report.imagingStudy ?? []).map(item =>
+        normalizeFhirReference(item?.reference, "ImagingStudy")
+    );
+}
 
-    if (references.length === 0) {
-        throw new Error(
-            "DiagnosticReport no contiene referencias a ImagingStudy."
-        );
+async function resolveStudyReference(caseId, requestedStudyReference) {
+    const normalizedCaseId = caseId.replace(/^pat-/, "").replace(/^imgstudy-/, "");
+    const patientReference = `Patient/pat-${normalizedCaseId}`;
+    const searchUrl = new URL(`${stripTrailingSlash(fhirBaseUrl)}/DiagnosticReport`, globalThis.location?.href);
+    searchUrl.searchParams.set("subject", patientReference);
+    searchUrl.searchParams.set("_format", "json");
+
+    const requested = normalizeFhirReference(requestedStudyReference, "ImagingStudy");
+    if (requestedStudyReference !== null && !requested) {
+        throw new Error("La referencia ImagingStudy solicitada no es válida.");
     }
 
-    const reference = references[0]?.reference;
+    const studies = new Map();
+    const visited = new Set();
+    let hasUnresolvedReference = false;
+    let page = searchUrl;
+    while (page) {
+        if (page.origin !== searchUrl.origin || page.pathname !== searchUrl.pathname ||
+            visited.has(page.href)) {
+            throw new Error("No se pudo verificar la paginación de estudios del caso.");
+        }
+        visited.add(page.href);
+        const bundle = await fetchFhirJson(page.href);
+        for (const { resource } of bundle.entry ?? []) {
+            if (resource?.resourceType !== "DiagnosticReport") continue;
+            if (normalizeFhirReference(resource.subject?.reference, "Patient") !== patientReference) continue;
 
-    if (!reference) {
-        throw new Error(
-            "La referencia a ImagingStudy está vacía."
-        );
+            for (const reference of getStudyReferences(resource)) {
+                if (reference === requested && requested) {
+                    return { diagnosticReport: resource, imagingStudyReference: reference };
+                }
+                if (reference && !studies.has(reference)) studies.set(reference, resource);
+                if (!reference) hasUnresolvedReference = true;
+            }
+        }
+        const next = bundle.link?.find(link => link.relation === "next");
+        if (next && !next.url) throw new Error("Enlace de paginación FHIR incompleto.");
+        page = next ? new URL(next.url, page) : null;
     }
 
-    return reference;
+    if (requested) throw new Error("El estudio seleccionado no está vinculado al caso solicitado.");
+    if (hasUnresolvedReference || studies.size > 1) {
+        throw new Error("El estudio del caso es ambiguo. Seleccione un estudio desde la lista de casos.");
+    }
+    if (!studies.size) throw new Error("No se encontró un ImagingStudy vinculado al caso.");
+    const [[imagingStudyReference, diagnosticReport]] = studies;
+    return { diagnosticReport, imagingStudyReference };
 }
 
 /**
@@ -124,60 +115,48 @@ export async function getFhirResourceByReference(reference) {
     return fetchFhirJson(url);
 }
 
+function isDicomUID(value) {
+    return typeof value === "string" && value.length <= 64 && /^\d+(?:\.\d+)+$/.test(value);
+}
+
 /**
  * Extrae StudyInstanceUID, SeriesInstanceUID e instancias
  * desde ImagingStudy.
  */
-export function extractDicomInfo(imagingStudy) {
-    if (!imagingStudy) {
-        throw new Error("ImagingStudy vacío.");
+export function extractDicomInfo(imagingStudy, requestedSeriesUID = null) {
+    const identifiers = imagingStudy.identifier ?? [];
+    const dicomIdentifiers = identifiers.filter(identifier => identifier.system === "urn:dicom:uid");
+    const oidIdentifiers = identifiers.filter(identifier => identifier.value?.startsWith("urn:oid:"));
+    const candidates = dicomIdentifiers.length ? dicomIdentifiers
+        : oidIdentifiers.length ? oidIdentifiers
+        : identifiers.filter(identifier => !identifier.system && isDicomUID(identifier.value));
+    const studyUIDs = new Set(candidates.map(identifier => stripUrnOid(identifier.value ?? "")));
+    if ([...studyUIDs].some(uid => !isDicomUID(uid))) {
+        throw new Error("El ImagingStudy contiene un identificador DICOM inválido.");
     }
-
-    let studyInstanceUID = null;
-
-    for (const identifier of imagingStudy.identifier ?? []) {
-        const value = identifier?.value;
-
-        if (!value) continue;
-
-        studyInstanceUID = stripUrnOid(value);
-        break;
+    if (studyUIDs.size !== 1) {
+        throw new Error("No se pudo identificar un StudyInstanceUID DICOM inequívoco.");
     }
-
-    if (!studyInstanceUID) {
-        throw new Error(
-            "No se encontró StudyInstanceUID en ImagingStudy.identifier."
-        );
-    }
+    const [studyInstanceUID] = studyUIDs;
 
     const series = imagingStudy.series ?? [];
-
-    if (series.length === 0) {
-        throw new Error(
-            "El ImagingStudy no contiene series DICOM."
-        );
+    // Preserve the default slide for links that omit seriesUID.
+    const matches = requestedSeriesUID === null
+        ? series.filter(item => item.uid === series[0]?.uid)
+        : series.filter(item => item.uid === requestedSeriesUID);
+    if (matches.length !== 1 || !isDicomUID(matches[0].uid)) {
+        throw new Error("No se pudo identificar la serie solicitada en el estudio seleccionado.");
     }
-
-    // Actualmente cada WSI tiene una serie SM principal.
-    const firstSeries = series[0];
-
-    const seriesInstanceUID = firstSeries.uid;
-
-    if (!seriesInstanceUID) {
-        throw new Error(
-            "No se encontró SeriesInstanceUID en ImagingStudy.series[0].uid."
-        );
-    }
-
+    const [activeSeries] = matches;
     const endpointReference =
+        activeSeries.endpoint?.[0]?.reference ??
         imagingStudy.endpoint?.[0]?.reference ??
-        firstSeries.endpoint?.[0]?.reference ??
         null;
 
     return {
         studyInstanceUID,
-        seriesInstanceUID,
-        instances: firstSeries.instance ?? [],
+        seriesInstanceUID: activeSeries.uid,
+        instances: activeSeries.instance ?? [],
         endpointReference,
     };
 }
@@ -346,20 +325,18 @@ export async function getCases() {
         reports.length
     );
 
+    const reportStudies = reports.flatMap(diagnosticReport => {
+        const references = new Set(getStudyReferences(diagnosticReport).filter(Boolean));
+        return [...references].map(imagingStudyReference => ({ diagnosticReport, imagingStudyReference }));
+    });
+
     const cases = await Promise.all(
-        reports.map(async (diagnosticReport) => {
+        reportStudies.map(async ({ diagnosticReport, imagingStudyReference }) => {
             try {
                 const patientReference =
-                    diagnosticReport.subject?.reference;
+                    normalizeFhirReference(diagnosticReport.subject?.reference, "Patient");
 
-                const imagingStudyReference =
-                    diagnosticReport.imagingStudy?.[0]
-                        ?.reference;
-
-                if (
-                    !patientReference ||
-                    !imagingStudyReference
-                ) {
+                if (!patientReference) {
                     console.warn(
                         "DiagnosticReport omitido por referencias incompletas:",
                         diagnosticReport.id
@@ -474,69 +451,46 @@ export async function getCases() {
  *   → Endpoint
  *   → identificadores DICOM
  */
-export async function resolveImagingForCase(caseId) {
-    const diagnosticReport =
-        await getDiagnosticReportByCaseId(caseId);
-
-    console.log(
-        "DiagnosticReport recuperado:",
-        diagnosticReport
-    );
-
-    const imagingStudyReference =
-        extractImagingStudyReference(diagnosticReport);
-
-    console.log(
-        "Referencia ImagingStudy:",
-        imagingStudyReference
-    );
-
-    const imagingStudy =
-        await getFhirResourceByReference(
-            imagingStudyReference
-        );
-
-    console.log(
-        "ImagingStudy recuperado:",
-        imagingStudy
-    );
+export async function resolveImagingForCase(caseId, {
+    imagingStudyReference: requestedStudyReference = null,
+    seriesUID = null,
+} = {}) {
+    const { diagnosticReport, imagingStudyReference } =
+        await resolveStudyReference(caseId, requestedStudyReference);
+    const imagingStudy = await getFhirResourceByReference(imagingStudyReference);
+    if (imagingStudy.resourceType !== "ImagingStudy" ||
+        `ImagingStudy/${imagingStudy.id}` !== imagingStudyReference) {
+        throw new Error("FHIR devolvió un ImagingStudy distinto del estudio seleccionado.");
+    }
 
     const {
         studyInstanceUID,
         seriesInstanceUID,
         instances,
         endpointReference,
-    } = extractDicomInfo(imagingStudy);
+    } = extractDicomInfo(imagingStudy, seriesUID);
 
-    let endpoint = null;
-
-    if (endpointReference) {
-        endpoint =
-            await getFhirResourceByReference(
-                endpointReference
-            );
-
-        console.log(
-            "Endpoint FHIR recuperado:",
-            endpoint
-        );
-    } else {
-        console.warn(
-            "ImagingStudy no contiene Endpoint."
-        );
+    const normalizedEndpoint = normalizeFhirReference(endpointReference, "Endpoint");
+    if (endpointReference !== null && !normalizedEndpoint) {
+        throw new Error("La referencia Endpoint de la serie activa no es válida.");
     }
-
-    const dicomWebUrl =
-        resolveDicomWebUrl(endpoint);
+    const endpoint = normalizedEndpoint
+        ? await getFhirResourceByReference(normalizedEndpoint)
+        : null;
+    if (endpoint && (endpoint.resourceType !== "Endpoint" ||
+        `Endpoint/${endpoint.id}` !== normalizedEndpoint)) {
+        throw new Error("FHIR devolvió un Endpoint distinto del asociado a la serie activa.");
+    }
 
     return {
         caseId,
         diagnosticReport,
         imagingStudy,
+        imagingStudyReference,
         endpoint,
         studyInstanceUID,
         seriesInstanceUID,
         instances,
-        dicomWebUrl,
+        dicomWebUrl: resolveDicomWebUrl(endpoint),
     };
 }

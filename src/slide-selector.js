@@ -21,6 +21,7 @@ function getSeriesLabel(series, index) {
 
 export function renderSlideSelector({
   imagingStudy,
+  imagingStudyReference,
   activeSeriesUID,
 }) {
   document
@@ -91,6 +92,7 @@ export function renderSlideSelector({
       const url =
         new URL(window.location.href);
 
+      url.searchParams.set("imagingStudy", imagingStudyReference);
       url.searchParams.set(
         "seriesUID",
         select.value
