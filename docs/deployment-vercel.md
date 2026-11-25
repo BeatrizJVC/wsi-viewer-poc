@@ -164,8 +164,7 @@ This repository implements:
 - DICOMweb integration;
 - WSI metadata processing;
 - `VOLUME` pyramid construction;
-- interactive rendering;
-- benchmark tooling.
+- interactive rendering.
 
 External components include:
 

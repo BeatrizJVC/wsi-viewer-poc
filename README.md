@@ -16,7 +16,7 @@ SSH tunnel (:8044)
 Orthanc on Environ server (:8042)
 ```
 
-> This setup is intended for development, streaming tests, and benchmarks. It is not the final production architecture.
+> This setup is intended for development and streaming tests. It is not the final production architecture.
 
 ### 1. Start the DICOM-FHIR backend
 
@@ -524,4 +524,5 @@ Additional technical documentation:
 - [Architecture](docs/architecture.md)
 - [Quick start](docs/quickstart.md)
 - [Remote deployment with Vercel and Cloudflare](docs/deployment-vercel.md)
-- [WSI streaming benchmarks](docs/benchmarks.md)
+- [WSI viewer component API](docs/wsi-viewer-component.md)
+- [Archived benchmark documentation (historical)](docs/archive/benchmarks/README.md)

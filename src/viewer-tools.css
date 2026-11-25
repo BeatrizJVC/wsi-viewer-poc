@@ -77,3 +77,8 @@
   .viewer-layout #viewport { min-height: 55vh; flex-shrink: 0; }
   .model-panel { width: 100%; max-height: 44vh; border-inline-start: 0; border-top: 1px solid #d8e0e8; }
 }
+
+.maps-summary:not(:empty) { margin-top: 12px; padding: 8px; background: #fff; border-radius: 6px; }
+.maps-summary h3 { margin: 0; font-size: 13px; }
+.maps-summary ul { margin-bottom: 0; overflow-wrap: anywhere; }
+.model-probabilities { white-space: pre-wrap; overflow-wrap: anywhere; }

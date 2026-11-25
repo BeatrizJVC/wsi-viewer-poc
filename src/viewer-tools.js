@@ -1,13 +1,30 @@
 import { getPointResolution } from 'ol/proj.js';
+import { unByKey } from 'ol/Observable.js';
 import { renderModelResults } from './model-results.js';
+import { captureInteractionState, createToolsDisposer, mountAroundContainer } from './wsi/tools-lifecycle.js';
 import './viewer-tools.css';
 
-export function renderViewerTools({ viewer, context }) {
+/**
+ * Barra de herramientas y panel de resultados IA alrededor del visor.
+ *
+ * @param {object} options
+ * @param {object} options.viewer - VolumeImageViewer ya renderizado.
+ * @param {HTMLElement} options.container - Contenedor donde se renderizó el visor.
+ * @param {object} options.context - Identidad de la lámina activa.
+ * @param {{width:number,height:number}|null} options.dimensions
+ * @returns {() => unknown[]} dispose: retira listeners, desactiva las
+ *   interacciones de las herramientas y restaura las previas, devuelve el
+ *   contenedor a su posición y retira los nodos creados. Idempotente; no lanza:
+ *   devuelve los errores de limpieza (arreglo vacío si todo fue bien).
+ */
+export function renderViewerTools({ viewer, container, context, dimensions }) {
+  if (!container) throw new TypeError('renderViewerTools requiere el contenedor del visor.');
   const { caseId, seriesUID } = context;
-  const viewport = document.getElementById('viewport');
+  const viewport = container;
   const map = viewer.getMap();
   const view = map.getView();
   const initial = { center: view.getCenter()?.slice(), resolution: view.getResolution(), rotation: view.getRotation() };
+  const interactionState = captureInteractionState(viewer);
   const toolbar = document.createElement('div');
   toolbar.className = 'viewer-tools'; toolbar.setAttribute('aria-label', 'Herramientas del visor'); toolbar.setAttribute('role', 'toolbar');
   const message = document.createElement('p'); message.className = 'tool-status'; message.setAttribute('role', 'status');
@@ -43,10 +60,12 @@ export function renderViewerTools({ viewer, context }) {
   });
   const output = document.createElement('output'); toolbar.append(output);
   const update = () => { const microns = getPointResolution(view.getProjection(), view.getResolution(), view.getCenter(), 'm') * 1e6; output.textContent = `Zoom ${view.getZoom().toFixed(1)} · ${Number.isFinite(microns) ? microns.toFixed(2) + ' µm/píxel' : 'Escala no disponible'} · ${viewer.numberOfROIs} ROI`; };
-  map.on('moveend', update); map.on('rendercomplete', update); update();
-  viewport.before(toolbar, message);
-  const layout = document.createElement('div'); layout.className = 'viewer-layout'; viewport.before(layout); layout.append(viewport);
-  renderModelResults({ container: layout, context });
+  const listenerKeys = [map.on('moveend', update), map.on('rendercomplete', update)]; update();
+  const layout = document.createElement('div'); layout.className = 'viewer-layout';
+  const restoreLayout = mountAroundContainer(viewport, { leading: [toolbar, message], layout });
+  renderModelResults({ container: layout, context, dimensions });
   map.updateSize();
   viewer.activateDragPanInteraction(); modes[0].setAttribute('aria-pressed', 'true');
+
+  return createToolsDisposer({ map, viewer, container: viewport, listenerKeys, unByKey, interactionState, restoreLayout });
 }

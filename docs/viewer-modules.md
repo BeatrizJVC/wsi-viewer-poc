@@ -19,17 +19,10 @@ JSON en el visor y permanecen separadas del feedback; no se escribe a FHIR.
 
 ## Identidad de caso, estudio y lámina
 
-La lista abre el visor con `caseId` e `imagingStudy`, una referencia al estudio
-seleccionado. El visor comprueba el vínculo en los DiagnosticReport del caso.
-Una URL antigua con solo `caseId` sigue funcionando si se verifica un único
-estudio. Cuando hay varios estudios, se debe elegir uno desde la lista.
-Al cambiar de lámina, el selector conserva la referencia del estudio y añade
-`seriesUID`. La serie activa aporta sus instancias y su endpoint, con el
-endpoint del estudio como alternativa. Si no se indica una lámina, se conserva
-la primera serie como lámina inicial del estudio verificado.
-
-En el checkout no se identificó un artefacto rotulado como benchmark V3.3.
-Los scripts existentes en `benchmarks/` se conservan para la comparación.
+La lista pasa `caseId` e `imagingStudy` al visor y el selector añade `seriesUID`.
+La resolución consulta los informes del caso y conserva el estudio elegido.
+Las URLs con solo `caseId` abren únicamente casos con un estudio verificable.
+La serie activa aporta sus instancias y endpoint, con respaldo del estudio.
 
 ## Contrato de carga de resultados
 
@@ -49,13 +42,7 @@ A/B/C de ejemplo. El contrato de importación de esta POC es explícito:
 
 `score` es opcional (0–1); los campos adicionales se conservan y se muestran en el
 JSON detallado. Los identificadores se muestran en cada entrada del catálogo.
-Los archivos se limitan a 5 MiB y se validan contra el caso y la serie activos.
-El visor requiere un contexto resuelto con referencia ImagingStudy, Study UID
-y Series UID. En el JSON POC, `caseId` y `seriesUID` siguen siendo obligatorios.
-Si el archivo incluye `imagingStudyReference` o `studyInstanceUID`, deben
-coincidir con el contexto activo. Se informa de identidad insuficiente o
-incompatible antes de mostrar resultados. Estos campos describen el contrato
-del visor. Los formatos de productores reales siguen pendientes de confirmación.
+Los archivos se limitan a 5 MB y se validan contra el caso y la serie activos.
 Las cargas viven en memoria hasta cambiar de lámina; el feedback se guarda
 localmente con copia de su resultado original y se recupera al cargar ese mismo
 resultado. No es persistencia clínica compartida.
@@ -91,3 +78,24 @@ lámina, navegar, dibujar y editar ROI, medir una distancia, exportar y comproba
 coordenadas, importar un JSON del caso/serie activos, guardar feedback, recargar
 y comprobar que la predicción original no cambia. Un JSON de otra lámina debe
 rechazarse. Sin endpoints configurados no se ha validado este recorrido integrado.
+
+
+## Importación nativa CLAM
+
+Resultados IA conserva el formato POC y acepta un `clam_ensemble.report` más
+un `clam_ensemble.maps` versión 1.0, juntos o en selecciones sucesivas. El
+caso, la serie y los identificadores de estudio declarados se contrastan con
+la lámina activa. Los archivos antiguos que solo identifican el `slide_id`
+pueden inspeccionarse como contenido sin vincular. La revisión local se
+habilita para resultados con serie verificada.
+
+El report conserva `gated_off`, probabilidades, campos adicionales y síntesis
+MLLM. Los maps muestran únicamente las capas presentes en el archivo y se
+validan por ejecución, cantidad de patches, coordenadas y scores. Se informa
+si los patches exceden las dimensiones DICOM. El visor requiere confirmar
+el registro OpenSlide a DICOM antes de dibujar overlays.
+
+La comprobación anterior del archivo 137092 registró patches fuera del ancho
+DICOM de 33280 píxeles. El panel conserva el aviso de desborde sin recortar ni
+reescalar los patches. Ante un error se ocultan los resultados, y la acción
+«Volver a la carga anterior» recupera explícitamente la última carga válida.
