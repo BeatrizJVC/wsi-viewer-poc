@@ -576,7 +576,7 @@ Vercel
 → Orthanc
 ```
 
-se utiliza para desarrollo, pruebas de streaming y benchmarks.
+se utiliza para desarrollo y pruebas de streaming.
 
 No corresponde todavía a una arquitectura productiva definitiva, ya que:
 
